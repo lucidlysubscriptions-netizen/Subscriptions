@@ -22,12 +22,12 @@ function TopNavigation() {
         <p className="font-['Inter:Bold',sans-serif] font-bold not-italic shrink-0 text-[17.203px] text-black tracking-[1.7203px] uppercase whitespace-nowrap">LucidlY</p>
       </div>
       <div className="absolute flex gap-[16px] items-center left-[547px] top-[16px]">
-        <div className="bg-[#f4f0ff] h-[40px] relative shrink-0 w-[620px]">
-          <div className="absolute h-[40px] left-0 pointer-events-none rounded-[99px] top-0 w-[620px]">
+        <div className="bg-[#f4f0ff] h-[40px] relative shrink-0 w-fit">
+          <div className="absolute inset-0 pointer-events-none rounded-[99px]">
             <div className="absolute bg-[#f4f0ff] inset-0 rounded-[99px]" />
             <div className="absolute inset-0 rounded-[inherit] shadow-[inset_4px_4px_4px_0px_rgba(0,0,0,0.08),inset_-4px_-4px_4px_0px_white]" />
           </div>
-          <div className="absolute flex items-center left-0 top-0">
+          <div className="relative flex items-center">
             {["Yields","Bridge","Portfolio","Points"].map((t) => (
               <div key={t} className="flex h-[40px] items-center justify-center opacity-60 px-[24px] py-[7px] rounded-[99px] shrink-0">
                 <p className="font-['Hanken_Grotesk:SemiBold',sans-serif] font-semibold leading-[26px] text-[16px] text-black whitespace-nowrap">{t}</p>

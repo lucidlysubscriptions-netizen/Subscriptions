@@ -118,14 +118,14 @@ function TopNavigation() {
       {/* Nav items */}
       <div className="absolute flex gap-[16px] items-center left-[547px] top-[16px]">
         {/* Pill nav */}
-        <div className="bg-[#f4f0ff] h-[40px] relative shrink-0 w-[620px]">
+        <div className="bg-[#f4f0ff] h-[40px] relative shrink-0 w-fit">
           {/* Track shadow */}
-          <div className="absolute h-[40px] left-0 pointer-events-none rounded-[99px] top-0 w-[620px]">
+          <div className="absolute inset-0 pointer-events-none rounded-[99px]">
             <div className="absolute bg-[#f4f0ff] inset-0 rounded-[99px]" />
             <div className="absolute inset-0 rounded-[inherit] shadow-[inset_4px_4px_4px_0px_rgba(0,0,0,0.08),inset_-4px_-4px_4px_0px_white]" />
           </div>
           {/* Tabs */}
-          <div className="absolute flex items-center left-0 top-0">
+          <div className="relative flex items-center">
             {["Yields", "Bridge", "Portfolio", "Points"].map((t) => (
               <div
                 key={t}
