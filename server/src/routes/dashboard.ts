@@ -1,7 +1,7 @@
 // GET /api/dashboard/:wallet — aggregated numbers for the Dashboard screen.
 import { Router } from "express";
 import { prisma } from "../db";
-import { getActiveSubscription, getBalance } from "../helpers";
+import { getActiveSubscription, getBalance, getCardUnlockAt } from "../helpers";
 
 export const dashboardRouter = Router();
 
@@ -16,6 +16,8 @@ dashboardRouter.get("/:wallet", async (req, res) => {
       totalDeposited: 0,
       totalWithdrawn: 0,
       totalRedeemed: 0,
+      cardUnlocksAt: null,
+      cardClaimable: false,
     });
   }
 
@@ -35,11 +37,27 @@ dashboardRouter.get("/:wallet", async (req, res) => {
     where: { subscription: { userId: user.id }, status: "success" },
   });
 
+  // When the next Claude card unlocks — computed server-side so the client
+  // never depends on the device clock for eligibility. Only meaningful while
+  // the stake is funded; a closed stake earns no further cards.
+  let cardUnlocksAt: string | null = null;
+  let cardClaimable = false;
+  if (subscription && balance > 0) {
+    const unlockAt = await getCardUnlockAt(
+      subscription.id,
+      subscription.plan.lockDays,
+    );
+    cardUnlocksAt = unlockAt ? unlockAt.toISOString() : null;
+    cardClaimable = unlockAt ? Date.now() >= unlockAt.getTime() : false;
+  }
+
   res.json({
     subscription,
     balance,
     totalDeposited: deposited._sum.amount ?? 0,
     totalWithdrawn: withdrawn._sum.amount ?? 0,
     totalRedeemed: redeemed._sum.amount ?? 0,
+    cardUnlocksAt,
+    cardClaimable,
   });
 });

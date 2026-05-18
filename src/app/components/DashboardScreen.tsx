@@ -77,7 +77,8 @@ function TopNavigation() {
 
 // State of this month's gift card claim.
 type GiftCardState =
-  | { state: "claimable" } // not yet claimed — show the claim banner
+  | { state: "locked"; unlockDays: number; isFirstCard: boolean } // 30-day lock not elapsed — show the countdown
+  | { state: "claimable" } // lock elapsed, not yet claimed — show the claim banner
   | { state: "claimed" } // claimed by email this month — nothing to display
   | { state: "preparing" } // requested on dashboard, link not provisioned yet
   | { state: "ready"; link: string }; // dashboard link provisioned — show it
@@ -125,34 +126,35 @@ function WithdrawButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-// Days until the next Claude card unlocks. The 30-day window is anchored to
-// the most recent redemption, or — before any redemption — the first deposit.
 const LOCK_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function getCountdown(
-  deposits: Deposit[],
-  redemptions: Redemption[],
-): { value: string; label: string } {
-  // After the first card has been claimed the countdown tracks the *next*
-  // card, anchored to the most recent claim.
-  const card = redemptions.length > 0 ? "next card" : "first card";
-  if (deposits.length === 0) {
-    return { value: "30 days", label: `Until ${card}` };
-  }
-  const anchorMs =
-    redemptions.length > 0
-      ? Math.max(...redemptions.map((r) => Date.parse(r.createdAt)))
-      : Math.min(...deposits.map((d) => Date.parse(d.createdAt)));
+// Whole days remaining until `unlockMs`, never negative. Rounds up so a
+// partial day still reads as a full day ("unlocks in 1 day", not "0 days").
+function daysUntil(unlockMs: number, nowMs: number): number {
+  return Math.max(0, Math.ceil((unlockMs - nowMs) / DAY_MS));
+}
 
-  const remainingMs = anchorMs + LOCK_DAYS * DAY_MS - Date.now();
+// The lock-status card's headline + caption. Driven by the server-computed
+// unlock timestamp, so it always agrees with what the backend will allow.
+function getCountdown(
+  cardUnlocksAt: string | null,
+  hasClaimed: boolean,
+  nowMs: number,
+): { value: string; label: string } {
+  const card = hasClaimed ? "next card" : "first card";
+  // No funded deposit yet — show the full window as a placeholder.
+  if (!cardUnlocksAt) {
+    return { value: `${LOCK_DAYS} days`, label: `Until ${card}` };
+  }
+  const remainingMs = Date.parse(cardUnlocksAt) - nowMs;
   if (remainingMs <= 0) {
     return {
       value: "Today",
       label: `${card[0].toUpperCase()}${card.slice(1)} ready`,
     };
   }
-  const days = Math.ceil(remainingMs / DAY_MS);
+  const days = daysUntil(Date.parse(cardUnlocksAt), nowMs);
   return {
     value: `${days} ${days === 1 ? "day" : "days"}`,
     label: `Until ${card}`,
@@ -199,12 +201,17 @@ function LeftPanel({
     bannerText = "This month's card is claimed — check your email";
     bannerBg = "bg-[#e3f3e3]";
     bannerOnClick = undefined;
+  } else if (giftCard.state === "locked") {
+    // 30-day lock still running — show the countdown, not a claim CTA.
+    const { unlockDays, isFirstCard } = giftCard;
+    const which = isFirstCard ? "first" : "next";
+    const when =
+      unlockDays === 1 ? "tomorrow" : `in ${unlockDays} days`;
+    bannerText = `Your ${which} $20 Claude Pro gift card unlocks ${when}`;
+    bannerBg = "bg-[#eceaf2]";
+    bannerOnClick = undefined;
   } else {
-    const monthLabel = new Date().toLocaleDateString("en-US", {
-      month: "long",
-      year: "numeric",
-    });
-    bannerText = `Claim your $20 Claude Pro gift card for ${monthLabel}`;
+    bannerText = "Your $20 Claude Pro gift card is ready — claim it now";
     bannerBg = "bg-gradient-to-r from-[#f9ebe6] to-[#f1ccc0]";
     bannerOnClick = onClaim;
   }
@@ -1096,6 +1103,15 @@ export default function DashboardScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successEmail, setSuccessEmail] = useState("");
 
+  // Drives the countdown. Ticking it every minute re-derives the days
+  // remaining and lets the banner flip from "locked" to "claimable" the
+  // moment the lock elapses — without the user reloading the page.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   // Load dashboard totals + history lists from the backend.
   const refresh = useCallback(async () => {
     const wallet = connectWallet();
@@ -1176,10 +1192,15 @@ export default function DashboardScreen() {
     ? redemptions.filter((r) => r.subscriptionId === activeSubId)
     : [];
 
+  // When the next card unlocks — the server-computed timestamp is the single
+  // source of truth, so the client never relies on the device clock to
+  // decide eligibility (it only counts down toward that timestamp).
+  const cardUnlocksAt = dashboard?.cardUnlocksAt ?? null;
+
   // Countdown to the next card. Once the stake is closed there is no next
   // card, so the card shows a neutral "closed" state — not a stale 30 days.
   const countdown = isActive
-    ? getCountdown(activeDeposits, activeRedemptions)
+    ? getCountdown(cardUnlocksAt, activeRedemptions.length > 0, nowMs)
     : { value: "—", label: "Stake closed" };
 
   // Earliest deposit of the current stake, shown on the header card.
@@ -1201,18 +1222,24 @@ export default function DashboardScreen() {
     (r) => Date.now() - Date.parse(r.createdAt) < YEAR_MS,
   ).length;
 
-  // A card is claimable once the 30-day window has elapsed and none has been
+  // A card is claimable once the 30-day lock has elapsed and none has been
   // claimed this month for the current stake. Withdrawing while one is
   // claimable forfeits it — the WithdrawModal warns about this.
-  const now = new Date();
+  const now = new Date(nowMs);
   const claimedThisMonth = activeRedemptions.some((r) => {
     const d = new Date(r.createdAt);
     return (
       d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
     );
   });
-  const hasClaimableCard =
-    isActive && countdown.value === "Today" && !claimedThisMonth;
+
+  // The lock is "still running" while the server's unlock timestamp is in the
+  // future. With no timestamp yet (no funded deposit) there is nothing to
+  // claim, so it is treated as locked too.
+  const cardLocked = cardUnlocksAt
+    ? nowMs < Date.parse(cardUnlocksAt)
+    : true;
+  const hasClaimableCard = isActive && !cardLocked && !claimedThisMonth;
 
   // Gift card delivery state for this month's "Request link on Dashboard"
   // claim. While the link is unset the banner shows a pending state; once
@@ -1224,13 +1251,21 @@ export default function DashboardScreen() {
       d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
     );
   });
+  // Days left on the lock — for the countdown banner. Falls back to the full
+  // window when there is no unlock timestamp yet (no funded deposit).
+  const unlockDays = cardUnlocksAt
+    ? daysUntil(Date.parse(cardUnlocksAt), nowMs)
+    : LOCK_DAYS;
+
   const giftCard: GiftCardState = dashboardClaimThisMonth?.giftCardLink
     ? { state: "ready", link: dashboardClaimThisMonth.giftCardLink }
     : dashboardClaimThisMonth
       ? { state: "preparing" }
       : claimedThisMonth
         ? { state: "claimed" } // claimed via email — link goes to their inbox
-        : { state: "claimable" };
+        : cardLocked
+          ? { state: "locked", unlockDays, isFirstCard: activeRedemptions.length === 0 }
+          : { state: "claimable" };
 
   // While a gift card link is being provisioned, poll the backend so the
   // banner flips to the delivered link as soon as it lands.

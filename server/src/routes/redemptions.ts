@@ -4,7 +4,12 @@
 //   PATCH /api/redemptions/:id/link — attach a provisioned gift card link
 import { Router } from "express";
 import { prisma } from "../db";
-import { getOrCreateUser, getActiveSubscription, getBalance } from "../helpers";
+import {
+  getOrCreateUser,
+  getActiveSubscription,
+  getBalance,
+  getCardUnlockAt,
+} from "../helpers";
 
 export const redemptionsRouter = Router();
 
@@ -109,22 +114,19 @@ redemptionsRouter.post("/", async (req, res) => {
     });
   }
 
-  // 30-day lock: the next card unlocks `plan.lockDays` after the most
-  // recent claim, or — before any claim — after the first deposit.
-  const deposits = await prisma.deposit.findMany({
-    where: { subscriptionId: subscription.id, status: "success" },
-    orderBy: { createdAt: "asc" },
-  });
-  const anchor = existing[0]?.createdAt ?? deposits[0]?.createdAt;
-  if (anchor) {
-    const unlockAt = anchor.getTime() + subscription.plan.lockDays * DAY_MS;
-    if (Date.now() < unlockAt) {
-      return res.status(409).json({
-        error: `Your next card unlocks on ${new Date(
-          unlockAt,
-        ).toLocaleDateString("en-US")}.`,
-      });
-    }
+  // 30-day lock: the next card unlocks `plan.lockDays` after the most recent
+  // claim, or — before any claim — after the first deposit. Same helper the
+  // dashboard uses to render the countdown, so the two never disagree.
+  const unlockAt = await getCardUnlockAt(
+    subscription.id,
+    subscription.plan.lockDays,
+  );
+  if (unlockAt && Date.now() < unlockAt.getTime()) {
+    return res.status(409).json({
+      error: `Your next card unlocks on ${unlockAt.toLocaleDateString(
+        "en-US",
+      )}.`,
+    });
   }
 
   const redemption = await prisma.redemption.create({

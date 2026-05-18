@@ -87,6 +87,12 @@ export interface Dashboard {
   totalDeposited: number;
   totalWithdrawn: number;
   totalRedeemed: number;
+  // When the next Claude card unlocks (ISO 8601), computed server-side.
+  // Null when the stake is closed or no card has been earned yet.
+  cardUnlocksAt: string | null;
+  // Server's snapshot of whether the lock has elapsed. The client re-derives
+  // this live from `cardUnlocksAt` so the banner flips without a reload.
+  cardClaimable: boolean;
 }
 
 // How a claimed gift card is delivered:
