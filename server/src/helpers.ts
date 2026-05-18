@@ -23,14 +23,17 @@ export async function getActiveSubscription(userId: string) {
 }
 
 // Current balance = successful deposits minus successful withdrawals.
+// The two sums are independent, so they run as one parallel round-trip.
 export async function getBalance(userId: string) {
-  const deposits = await prisma.deposit.aggregate({
-    _sum: { amount: true },
-    where: { subscription: { userId }, status: "success" },
-  });
-  const withdrawals = await prisma.withdrawal.aggregate({
-    _sum: { amount: true },
-    where: { subscription: { userId }, status: "success" },
-  });
+  const [deposits, withdrawals] = await Promise.all([
+    prisma.deposit.aggregate({
+      _sum: { amount: true },
+      where: { subscription: { userId }, status: "success" },
+    }),
+    prisma.withdrawal.aggregate({
+      _sum: { amount: true },
+      where: { subscription: { userId }, status: "success" },
+    }),
+  ]);
   return (deposits._sum.amount ?? 0) - (withdrawals._sum.amount ?? 0);
 }
