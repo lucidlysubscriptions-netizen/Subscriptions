@@ -1264,24 +1264,6 @@ export default function DashboardScreen() {
           ? { state: "locked", unlockDays, isFirstCard: activeRedemptions.length === 0 }
           : { state: "claimable" };
 
-  // Dev/testing only — fast-forward the 30-day lock so the card unlocks in
-  // ~10s, then re-tick the clock after the leeway so the banner flips from
-  // "locked" to "claimable" on its own, exactly as it would in production.
-  const handleFastForward = async () => {
-    try {
-      await api.devFastForward(connectWallet());
-      await refresh();
-      setTimeout(() => {
-        setNowMs(Date.now());
-        refresh().catch(() => {
-          /* dev tool — ignore transient failures */
-        });
-      }, 10_500);
-    } catch {
-      /* dev tool — ignore failures (e.g. DEV_TOOLS disabled on the server) */
-    }
-  };
-
   // While a gift card link is being provisioned, poll the backend so the
   // banner flips to the delivered link as soon as it lands.
   useEffect(() => {
@@ -1340,17 +1322,6 @@ export default function DashboardScreen() {
             setShowClaimModal(true);
           }}
         />
-      )}
-      {/* Dev-only shortcut — compiled out of production builds entirely
-          (import.meta.env.DEV is false in `vite build`). */}
-      {import.meta.env.DEV && isActive && cardLocked && (
-        <button
-          onClick={handleFastForward}
-          className="fixed bottom-[16px] right-[16px] z-50 cursor-pointer rounded-full bg-[#d97757] px-[16px] py-[8px] text-[13px] font-semibold text-white shadow-[0_4px_12px_rgba(0,0,0,0.2)] hover:opacity-90"
-          title="Fast-forward the 30-day card lock (dev/testing only)"
-        >
-          ⏩ Fast-forward lock (dev)
-        </button>
       )}
     </div>
   );

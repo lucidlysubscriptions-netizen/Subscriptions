@@ -14,7 +14,6 @@ import {
   recoverPendingDeliveries,
 } from "./routes/redemptions";
 import { dashboardRouter } from "./routes/dashboard";
-import { devRouter } from "./routes/dev";
 
 const app = express();
 
@@ -42,13 +41,6 @@ app.use("/api/deposits", depositsRouter);
 app.use("/api/withdrawals", withdrawalsRouter);
 app.use("/api/redemptions", redemptionsRouter);
 app.use("/api/dashboard", dashboardRouter);
-
-// Dev/testing routes — mounted only when explicitly enabled, so they never
-// exist in a production deployment. Set DEV_TOOLS=1 to turn them on locally.
-if (process.env.DEV_TOOLS === "1") {
-  app.use("/api/dev", devRouter);
-  console.log("Dev tools enabled — /api/dev routes are live.");
-}
 
 // 404 for any unknown route.
 app.use((_req, res) => {

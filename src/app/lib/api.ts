@@ -156,12 +156,4 @@ export const api = {
     }),
 
   getDashboard: (wallet: string) => request<Dashboard>(`/dashboard/${wallet}`),
-
-  // Dev/testing only — fast-forwards the current stake's 30-day card lock so
-  // it unlocks ~10s from now. The backend route exists only when DEV_TOOLS=1.
-  devFastForward: (wallet: string) =>
-    request<{ ok: boolean; unlocksAt: string }>("/dev/fast-forward", {
-      method: "POST",
-      body: JSON.stringify({ wallet }),
-    }),
 };
