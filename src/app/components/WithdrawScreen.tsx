@@ -34,9 +34,6 @@ function TopNavigation() {
                 <p className="font-['Hanken_Grotesk:SemiBold',sans-serif] font-semibold leading-[26px] text-[16px] text-black whitespace-nowrap">{t}</p>
               </div>
             ))}
-            <div className="bg-[#f8f5ff] flex h-[40px] items-center justify-center px-[20px] py-[3px] rounded-[99px] shadow-[4px_4px_8px_0px_rgba(0,0,0,0.08),-4px_-4px_8px_0px_white] shrink-0">
-              <p className="font-['Hanken_Grotesk:SemiBold',sans-serif] font-semibold leading-[26px] text-[16px] text-black whitespace-nowrap">Subscriptions</p>
-            </div>
             <div className="flex h-[40px] items-center justify-center opacity-60 px-[24px] py-[7px] rounded-[99px] shrink-0">
               <p className="font-['Hanken_Grotesk:SemiBold',sans-serif] font-semibold leading-[26px] text-[16px] text-black whitespace-nowrap">Docs</p>
             </div>
