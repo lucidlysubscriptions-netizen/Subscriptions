@@ -1,0 +1,125 @@
+// Prisma schema for the Subscriptions app.
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────── Enums (fixed sets of allowed values) ───────────────
+
+enum SubscriptionStatus {
+  active
+  cancelled
+}
+
+enum TxStatus {
+  pending
+  success
+  failed
+}
+
+enum ClaimMethod {
+  email // gift card link emailed to the user
+  dashboard // gift card link posted on the dashboard, tied to the wallet
+}
+
+// ─────────────── Tables ───────────────
+
+// One row per connected wallet.
+model User {
+  id            String   @id @default(uuid())
+  walletAddress String   @unique @map("wallet_address")
+  email         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  subscriptions Subscription[]
+
+  @@map("users")
+}
+
+// The plan catalog (Pro / Max 5x / Max 20x). Seeded once.
+model Plan {
+  id          String @id @default(uuid())
+  slug        String @unique // "pro", "max5", "max20"
+  name        String // "Pro", "Max 5x", "Max 20x"
+  description String // "For the curious"
+  minDeposit  Int    @map("min_deposit") // whole dollars, e.g. 3000
+  multiplier  Int // 1, 5, 20
+  lockDays    Int    @map("lock_days") // e.g. 30
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+// Links a user to the plan they chose.
+// Business rule: only one `active` subscription per user (enforced in app logic).
+model Subscription {
+  id        String             @id @default(uuid())
+  userId    String             @map("user_id")
+  planId    String             @map("plan_id")
+  status    SubscriptionStatus @default(active)
+  createdAt DateTime           @default(now()) @map("created_at")
+
+  user        User         @relation(fields: [userId], references: [id])
+  plan        Plan         @relation(fields: [planId], references: [id])
+  deposits    Deposit[]
+  withdrawals Withdrawal[]
+  redemptions Redemption[]
+
+  @@map("subscriptions")
+}
+
+// Append-only: each deposit is one permanent row (deposit history).
+model Deposit {
+  id             String   @id @default(uuid())
+  subscriptionId String   @map("subscription_id")
+  amount         Int // whole dollars
+  token          String   @default("USDC")
+  status         TxStatus @default(pending)
+  unlocksAt      DateTime @map("unlocks_at") // createdAt + plan.lockDays
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@map("deposits")
+}
+
+// Append-only: withdrawal history (returning principal).
+model Withdrawal {
+  id             String   @id @default(uuid())
+  subscriptionId String   @map("subscription_id")
+  amount         Int // whole dollars
+  status         TxStatus @default(success)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@map("withdrawals")
+}
+
+// Append-only: redemption history (claiming earned yield/rewards).
+model Redemption {
+  id             String      @id @default(uuid())
+  subscriptionId String      @map("subscription_id")
+  amount         Int // whole dollars, fixed $20 per claim
+  token          String      @default("USDC")
+  status         TxStatus    @default(success)
+  method         ClaimMethod // how the reward was claimed
+  // Where the card is delivered: the email address for `email` claims;
+  // null for `dashboard` claims (the wallet itself is the destination).
+  destination    String?
+  // Provisioned gift card link. Null until the team feeds it in (for a
+  // `dashboard` claim); stays null for `email` claims.
+  giftCardLink   String?     @map("gift_card_link")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@map("redemptions")
+}
